@@ -99,7 +99,18 @@ if __name__ == "__main__":
                     else os.path.join(args.image_dir, x)
                     for x in ori_test_list]
     else:
-        image_file = os.path.join(args.image_dir, args.image_file)
+        # Handle single-image input consistently with list case:
+        # if the provided path is "dataset-absolute" (starts with '/'),
+        # prepend image_dir by simple concatenation instead of os.path.join,
+        # so that '/leftImg8bit/val/...' works like entries in val.txt.
+        if args.image_dir != '':
+            if os.path.isabs(args.image_file):
+                image_file = args.image_dir + args.image_file
+            else:
+                image_file = os.path.join(args.image_dir, args.image_file)
+        else:
+            image_file = args.image_file
+
         if os.path.exists(image_file):
             ori_test_list = [args.image_file]
             test_list = [image_file]
@@ -136,7 +147,7 @@ if __name__ == "__main__":
                     transforms.ToTensor(),
                     ])
 
-    h5_f = h5py.File("./utils/val_label_binary_np.h5", 'r')
+    h5_f = h5py.File("/Users/stevenjiang/Documents/GitHub/CASENet/val_label_binary_np.h5", 'r')
     
     for idx_img in range(len(test_list)):
         img = Image.open(test_list[idx_img]).convert('RGB')
@@ -224,7 +235,7 @@ if __name__ == "__main__":
             # dilated = cv2.dilate(gray, kernel)
             closed = cv2.morphologyEx(gray, cv2.MORPH_CLOSE, kernel) # Closing Morphological Operator
             # opened = cv2.morphologyEx(gray, cv2.MORPH_OPEN, kernel) # Opening Morphological Operator
-            _, cnts, hierarchy = cv2.findContours(closed.copy(), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+            cnts, hierarchy = cv2.findContours(closed.copy(), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
             
             # select contour based on area and arc length
             # print(len(cnts)) 

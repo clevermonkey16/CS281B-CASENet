@@ -37,7 +37,7 @@ def gen_mapping_layer_name(model):
                 anno_dict = {'0':"a", '1':"b", '2':"c"}
             elif "res3" in m_name or "res4" in m_name:
                 anno_dict = {}
-                for k in xrange(23):
+                for k in range(23):
                     if k == 0:
                         anno_dict[str(k)] = "a"
                     else:
@@ -185,7 +185,7 @@ class SliceLayer(nn.Module):
         slice into several single piece in a specific dimension. Here for dim=1
         """
         sliced_list = []
-        for idx in xrange(input_data.size()[1]):
+        for idx in range(input_data.size()[1]):
             sliced_list.append(input_data[:, idx, :, :].unsqueeze(1))
 
         return sliced_list
@@ -356,7 +356,7 @@ class ResNet(nn.Module):
         
         # Add low-level feats to sliced_list
         final_sliced_list = []
-        for i in xrange(len(sliced_list)):
+        for i in range(len(sliced_list)):
             final_sliced_list.append(sliced_list[i])
             final_sliced_list.append(score_feats1)
             final_sliced_list.append(cropped_score_feats2)

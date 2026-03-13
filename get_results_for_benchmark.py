@@ -105,7 +105,7 @@ if __name__ == "__main__":
             if not os.path.exists(os.path.join(args.output_dir, str(cls_idx))):
                 os.makedirs(os.path.join(args.output_dir, str(cls_idx)))
             imwrite(os.path.join(args.output_dir, str(cls_idx), img_base_name_noext+'.png'), im_arr)
-            print 'processed: '+test_lst[idx_img]
+            print('processed: '+test_lst[idx_img])
     
-    print 'Done!'
+    print('Done!')
 

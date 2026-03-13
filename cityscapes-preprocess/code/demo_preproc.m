@@ -12,8 +12,10 @@ function demo_preproc()
 clc; clear; close all;
 
 %% Setup Directories
-dataRoot = '../data_orig';
-genDataRoot = '../data_proc';
+% dataRoot = '../data_orig';
+dataRoot = '/Users/stevenjiang/Documents/GitHub/CASENet/cityscapes-preprocess/data_orig';
+
+genDataRoot = '/Users/stevenjiang/Documents/GitHub/CASENet/cityscapes-preprocess/data_proc';
 suffixImage = '_leftImg8bit.png';
 suffixColor = '_gtFine_color.png';
 suffixLabelIds = '_gtFine_labelIds.png';
@@ -27,7 +29,7 @@ numCls = 19;
 radius = 2;
 
 %% Setup Parallel Pool
-numWorker = 4; % Number of matlab workers for parallel computing
+numWorker = 8; % Number of matlab workers for parallel computing
 matlabVer = version('-release');
 if( str2double(matlabVer(1:4)) > 2013 || (str2double(matlabVer(1:4)) == 2013 && strcmp(matlabVer(5), 'b')) )
     delete(gcp('nocreate'));
@@ -45,11 +47,14 @@ if(exist(genDataRoot, 'file')==0)
 end
 
 %% Generate Preprocessed Dataset
-setList = {'train', 'val', 'test'};
+setList = {'val'};
+% fprintf("Generating preprocessed dataset...\n");
 for idxSet = 1:length(setList)
     setName = setList{idxSet};
+    % fprintf("Processing set: %s\n", setName);
     fidList = fopen([genDataRoot '/' setName '.txt'], 'w');
     cityList = dir([dataRoot '/leftImg8bit/' setName]);
+    % fprintf("Processing %d cities...\n", length(cityList));
     for idxCity = 3:length(cityList)
         cityName = cityList(idxCity, 1).name;
         if(exist([genDataRoot '/leftImg8bit/' setName '/' cityName], 'file')==0)
