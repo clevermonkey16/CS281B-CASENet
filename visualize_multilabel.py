@@ -23,6 +23,9 @@ from prep_dataset.prep_cityscapes_dataset import RGB2BGR, ToTorchFormatTensor
 
 import utils.utils as utils
 
+# Color for prediction overlay on real images (R, G, B) 0–255. Cyan = visible on most scenes; try (255,255,255) for white, (0,255,0) for lime.
+OVERLAY_COLOR = (0, 255, 255)  # cyan
+
 def get_cityscapes_class_names():
     return ['road',
             'sidewalk',
@@ -131,41 +134,37 @@ if __name__ == "__main__":
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
 
-     # Define normalization for data 
-    input_size = 472
+    # Define normalization for data (no resizing: model is fully convolutional, accepts any size)
     normalize = transforms.Normalize(mean=[104.008, 116.669, 122.675], std=[1, 1, 1])
-    
+
     img_transform = transforms.Compose([
-                    transforms.Resize([input_size, input_size]),
                     RGB2BGR(roll=True),
                     ToTorchFormatTensor(div=False),
                     normalize,
                     ])
-    label_transform = transforms.Compose([
-                    transforms.ToPILImage(),
-                    transforms.Resize([input_size, input_size], interpolation=PIL.Image.NEAREST),
-                    transforms.ToTensor(),
-                    ])
 
     h5_f = h5py.File("/Users/stevenjiang/Documents/GitHub/CASENet/val_label_binary_np.h5", 'r')
-    
+
     for idx_img in range(len(test_list)):
         img = Image.open(test_list[idx_img]).convert('RGB')
         processed_img = img_transform(img).unsqueeze(0)
-        processed_img = utils.check_gpu(None, processed_img)    
+        height, width = processed_img.size()[2], processed_img.size()[3]
+        processed_img = utils.check_gpu(None, processed_img)
         score_feats1, score_feats2, score_feats3, score_feats5, score_fuse_feats = model(processed_img, for_vis=True)
 
-        # Load numpy from hdf5 for gt.
+        # Load numpy from hdf5 for gt; resize each channel to current image size
         np_data = h5_f['data/'+ori_test_list[idx_img].replace('leftImg8bit', 'gtFine').replace('/', '_').replace('.png', '_edge.npy')]
         label_data = []
         num_cls = np_data.shape[2]
         for k in range(num_cls):
-            if np_data[:,:,num_cls-1-k].sum() > 0:
-                label_tensor = label_transform(torch.from_numpy(np_data[:, :, num_cls-1-k]).unsqueeze(0).float())
-            else: # ALL zeros, don't need transform, maybe a bit faster?..
-                label_tensor = torch.zeros(1, input_size, input_size).float()
-            label_data.append(label_tensor.squeeze(0).long())
-        label_data = torch.stack(label_data).transpose(0,1).transpose(1,2) # N X H X W -> H X W X N
+            channel = np_data[:, :, num_cls-1-k]
+            if channel.sum() > 0:
+                resized = cv2.resize(channel.astype(np.uint8), (width, height), interpolation=cv2.INTER_NEAREST)
+                label_tensor = torch.from_numpy(resized).long()
+            else:
+                label_tensor = torch.zeros(height, width).long()
+            label_data.append(label_tensor)
+        label_data = torch.stack(label_data).transpose(0, 1).transpose(1, 2)  # N X H X W -> H X W X N
     
         img_base_name_noext = os.path.splitext(os.path.basename(test_list[idx_img]))[0]
         img_base_name_noext = img_base_name_noext.replace('_leftImg8bit', '') 
@@ -217,45 +216,17 @@ if __name__ == "__main__":
             rgb[:,:,2] = (b/255.0)
             if not os.path.exists(os.path.join(args.output_dir, img_base_name_noext)):
                 os.makedirs(os.path.join(args.output_dir, img_base_name_noext))
-            plt.imsave(os.path.join(args.output_dir, img_base_name_noext, img_base_name_noext+'_fused_pred_'+cls_names[idx_cls]+'.png'), rgb) 
+            plt.imsave(os.path.join(args.output_dir, img_base_name_noext, img_base_name_noext+'_fused_pred_'+cls_names[idx_cls]+'.png'), rgb)
 
-            gray = np.zeros(r.shape, dtype=np.uint8)
-            gray[score_pred_flag==0] = 0
-            gray[score_pred_flag==1] = 127
-
-            # create border for image
-            top = 1
-            bottom = top
-            left = 1
-            right = left
-            gray = cv2.copyMakeBorder(gray, top, bottom, left, right, cv2.BORDER_CONSTANT, None, (127,))
-
-            # morphological operator
-            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(7,7))
-            # dilated = cv2.dilate(gray, kernel)
-            closed = cv2.morphologyEx(gray, cv2.MORPH_CLOSE, kernel) # Closing Morphological Operator
-            # opened = cv2.morphologyEx(gray, cv2.MORPH_OPEN, kernel) # Opening Morphological Operator
-            cnts, hierarchy = cv2.findContours(closed.copy(), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-            
-            # select contour based on area and arc length
-            # print(len(cnts)) 
-            # cnts = [c for c in cnts if (cv2.arcLength(c, True) < 1880.0 and cv2.arcLength(c, True) >= 10.0)]
-            cnts = [c for c in cnts if (cv2.arcLength(c, True) < 1880.0 and cv2.contourArea(c, True) >= 150.0)]
-            cnts = sorted(cnts, key = cv2.contourArea, reverse = True)
-            # print(cls_names[idx_cls])
-            # for c in cnts:
-            #     print(cv2.arcLength(c, True), cv2.contourArea(c))   
-            # cv2.drawContours(gray, cnts, -1, (255,255,0), 3)
-            
-            resizedimg = img.resize((472,472), resample=PIL.Image.BILINEAR)
-            opencv_image = np.array(resizedimg) 
-            opencv_image = opencv_image[:, :, ::-1].copy() 
-            cv2.drawContours(opencv_image, cnts, -1, (255,255,0), 1)
-            opencv_image = cv2.resize(opencv_image, img.size, interpolation = cv2.INTER_CUBIC)
-            
+            # overlay raw fused prediction on original image: prediction regions = OVERLAY_COLOR (full brightness, no alpha)
+            img_np = np.array(img).astype(np.float32) / 255.0  # (H, W, 3) RGB
+            mask = np.clip(score_pred, 0, 1)[:, :, np.newaxis]  # (H, W, 1) raw prediction 0–1
+            color_np = np.array(OVERLAY_COLOR, dtype=np.float32).reshape(1, 1, 3) / 255.0
+            overlay = img_np * (1 - mask) + color_np * mask
+            overlay = (np.clip(overlay, 0, 1) * 255).astype(np.uint8)
             if not os.path.exists(os.path.join(args.output_dir, img_base_name_noext)):
                 os.makedirs(os.path.join(args.output_dir, img_base_name_noext))
-            cv2.imwrite(os.path.join(args.output_dir, img_base_name_noext, img_base_name_noext+'_'+cls_names[idx_cls]+'.png'), opencv_image)
+            plt.imsave(os.path.join(args.output_dir, img_base_name_noext, img_base_name_noext+'_'+cls_names[idx_cls]+'.png'), overlay)
 
         # gt visualization
         gt_data = label_data.numpy() 
