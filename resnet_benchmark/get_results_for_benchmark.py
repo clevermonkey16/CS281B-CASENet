@@ -95,6 +95,8 @@ def run_inference(
     # load net
     model = CASENet_resnet101(pretrained=False, num_classes=NUM_CLS)
     model.eval()
+    if torch.cuda.is_available():
+        model = model.cuda()
     utils.load_pretrained_model(model, model_path)
 
     os.makedirs(output_dir, exist_ok=True)
@@ -116,7 +118,7 @@ def run_inference(
         processed_img = img_transform(img).unsqueeze(0)
         height = processed_img.size()[2]
         width = processed_img.size()[3]
-        processed_img_var = utils.check_gpu(None, processed_img)
+        processed_img_var = utils.check_gpu(0, processed_img)
 
         t0 = time.perf_counter()
         with torch.no_grad():
@@ -130,6 +132,8 @@ def run_inference(
         inference_times.append((img_base_name_noext, elapsed))
 
         for cls_idx in range(NUM_CLS):
+            # im_arr = np.empty((height, width), np.uint8)
+            # im_arr = (score_output[:, :, cls_idx].data.cpu().numpy()) * 255.0
             im_arr = (score_output[:, :, cls_idx].data.cpu().numpy() * 255.0).clip(0, 255).astype(np.uint8)
             imwrite(os.path.join(output_dir, str(cls_idx), img_base_name_noext + '.png'), im_arr)
         print('processed: {} ({:.3f}s)'.format(test_lst[idx_img], elapsed))
