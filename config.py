@@ -42,7 +42,10 @@ def get_args():
                         help='path to latest checkpoint (default: None)')
     parser.add_argument('--pretrained-model', default='', type=str, metavar='PATH',
                         help='path to pretrained checkpoint (default: None)')
-    
+    parser.add_argument('--backbone', default='mobilenetv3', type=str,
+                        choices=['resnet101', 'mobilenetv3'],
+                        help='backbone architecture (default: mobilenetv3)')
+
     args = parser.parse_args()
 
     return args

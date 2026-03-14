@@ -23,8 +23,7 @@ import torchvision.datasets as datasets
 # import torch.backends.cudnn as cudnn
 import torch.nn.functional as F
 
-from modules.CASENet import CASENet_resnet101
-from prep_dataset.prep_cityscapes_dataset import RGB2BGR, ToTorchFormatTensor
+from modules.CASENet import CASENet_mobilenetv3
 
 import utils.utils as utils
 
@@ -127,7 +126,7 @@ if __name__ == "__main__":
 
     # load network
     num_cls = 19
-    model = CASENet_resnet101(pretrained=False, num_classes=num_cls)
+    model = CASENet_mobilenetv3(pretrained=False, num_classes=num_cls)
     # model = model.cuda()
     model = model.eval()
     # cudnn.benchmark = True
@@ -140,11 +139,10 @@ if __name__ == "__main__":
         os.makedirs(args.output_dir)
 
     # Define normalization for data (no resizing: model is fully convolutional, accepts any size)
-    normalize = transforms.Normalize(mean=[104.008, 116.669, 122.675], std=[1, 1, 1])
+    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 
     img_transform = transforms.Compose([
-                    RGB2BGR(roll=True),
-                    ToTorchFormatTensor(div=False),
+                    transforms.ToTensor(),
                     normalize,
                     ])
 

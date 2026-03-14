@@ -27,8 +27,7 @@ import torchvision.datasets as datasets
 # import torch.backends.cudnn as cudnn
 import torch.nn.functional as F
 
-from modules.CASENet import CASENet_resnet101
-from prep_dataset.prep_cityscapes_dataset import RGB2BGR, ToTorchFormatTensor
+from modules.CASENet import CASENet_mobilenetv3
 
 import utils.utils as utils
 
@@ -93,7 +92,7 @@ def run_inference(
             raise IOError('nothing to be tested!')
 
     # load net
-    model = CASENet_resnet101(pretrained=False, num_classes=NUM_CLS)
+    model = CASENet_mobilenetv3(pretrained=False, num_classes=NUM_CLS)
     model.eval()
     if torch.cuda.is_available():
         model = model.cuda()
@@ -106,10 +105,9 @@ def run_inference(
         dir_path = os.path.join(output_dir, str(cls_idx))
         os.makedirs(dir_path, exist_ok=True)
 
-    normalize = transforms.Normalize(mean=[104.008, 116.669, 122.675], std=[1, 1, 1])
+    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     img_transform = transforms.Compose([
-        RGB2BGR(roll=True),
-        ToTorchFormatTensor(div=False),
+        transforms.ToTensor(),
         normalize,
     ])
 
