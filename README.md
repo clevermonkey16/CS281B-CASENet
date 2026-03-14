@@ -55,28 +55,33 @@ Optional arguments:
 ```
 
 ## Visualization
-For visualizing feature maps, ground truths and predictions, run: 
+For visualizing feature maps, ground truths and predictions (ResNet benchmark scripts), run from the project root:
 ```
-python visualize_multilabel.py [--model MODEL] [--image_file IMAGE] [--image_dir IMAGE_DIR] [--output_dir OUTPUT_DIR]
+python resnet_benchmark/visualize_multilabel.py [--model MODEL] [--image_file IMAGE] [--image_dir IMAGE_DIR] [--output_dir OUTPUT_DIR]
 ```
 
 For example, to visualize on the validation set of Cityscapes dataset:
 ```
-python visualize_multilabel.py -m pretrained_models/model_casenet.pth.tar -f leftImg8bit/val/lindau/lindau_000045_000019_leftImg8bit.png -d cityscapes-preprocess/data_proc/ -o output/ 
+python resnet_benchmark/visualize_multilabel.py -m pretrained_models/model_casenet.pth.tar -f leftImg8bit/val/lindau/lindau_000045_000019_leftImg8bit.png -d cityscapes-preprocess/data_proc/ -o output/
 ```
 
 ## Testing
-For testing a pretrained model on new images, run:
+For testing a pretrained model on new images (ResNet benchmark), run from the project root:
 ```
-python get_results_for_benchmark.py [--model MODEL] [--image_file IMAGE] [--image_dir IMAGE_DIR] [--output_dir OUTPUT_DIR]
+python resnet_benchmark/get_results_for_benchmark.py [--model MODEL] [--image_file IMAGE] [--image_dir IMAGE_DIR] [--output_dir OUTPUT_DIR]
 ```
 
-For example, 
+For example,
 ```
-python get_results_for_benchmark.py -m pretrained_models/model_casenet.pth.tar -f img1.png -d images/ -o output/
+python resnet_benchmark/get_results_for_benchmark.py -m pretrained_models/model_casenet.pth.tar -f img1.png -d images/ -o output/
 ```
 
 A class wise prediction map will be generated in the output directory specified.
+
+To run full validation inference and evaluation in one go:
+```
+python resnet_benchmark/batch_eval_val.py -m pretrained_models/model_casenet.pth.tar
+```
 
 ## Additional changes
 1. Added script to convert edges to contours and visualize

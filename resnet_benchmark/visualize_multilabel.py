@@ -2,6 +2,11 @@ import os
 import sys
 import argparse
 
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+_project_root = os.path.abspath(os.path.join(_script_dir, '..'))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
+
 import numpy as np
 import cv2
 import PIL
@@ -143,7 +148,7 @@ if __name__ == "__main__":
                     normalize,
                     ])
 
-    h5_f = h5py.File("/Users/stevenjiang/Documents/GitHub/CASENet/val_label_binary_np.h5", 'r')
+    h5_f = h5py.File(os.path.join(_project_root, 'val_label_binary_np.h5'), 'r')
 
     for idx_img in range(len(test_list)):
         img = Image.open(test_list[idx_img]).convert('RGB')

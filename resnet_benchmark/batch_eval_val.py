@@ -12,9 +12,10 @@ import sys
 
 def main():
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    default_data_root = os.path.join(script_dir, "cityscapes-preprocess", "data_proc")
+    project_root = os.path.abspath(os.path.join(script_dir, '..'))
+    default_data_root = os.path.join(project_root, "cityscapes-preprocess", "data_proc")
     default_val_list = "val.txt"
-    default_pred_dir = os.path.join(script_dir, "output", "val_pred")
+    default_pred_dir = os.path.join(project_root, "output", "val_pred")
 
     parser = argparse.ArgumentParser(
         description="Batch run inference and evaluation on Cityscapes val set"
@@ -73,7 +74,7 @@ def main():
         "-o", args.pred_dir,
     ]
     print("Running inference on full val set...")
-    ret = subprocess.run(cmd_inference, cwd=script_dir)
+    ret = subprocess.run(cmd_inference, cwd=project_root)
     if ret.returncode != 0:
         print("Inference failed with exit code {}".format(ret.returncode), file=sys.stderr)
         sys.exit(ret.returncode)
@@ -87,7 +88,7 @@ def main():
         "-o", eval_output_dir,
     ]
     print("Running evaluation...")
-    ret = subprocess.run(cmd_eval, cwd=script_dir)
+    ret = subprocess.run(cmd_eval, cwd=project_root)
     if ret.returncode != 0:
         print("Evaluation failed with exit code {}".format(ret.returncode), file=sys.stderr)
         sys.exit(ret.returncode)

@@ -18,6 +18,11 @@ import sys
 import argparse
 import csv
 
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+_project_root = os.path.abspath(os.path.join(_script_dir, '..'))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
+
 import numpy as np
 import cv2
 import h5py
@@ -29,7 +34,7 @@ CITYSCAPES_CLASS_NAMES = [
 ]
 
 NUM_CLS = 19
-LABEL_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'val_label_binary_np.h5')
+LABEL_FILE = os.path.join(_project_root, 'val_label_binary_np.h5')
 
 
 def load_gt(h5_f, label_path):
