@@ -8,7 +8,6 @@ and compares them against ground truth from the HDF5 label file.
 
 Usage:
     python evaluate.py -p output_dir -l cityscapes-preprocess/data_proc/val.txt
-
 The prediction PNGs are expected at: <pred_dir>/<cls_idx>/<image_name>.png
 (the layout produced by get_results_for_benchmark.py).
 """
@@ -26,6 +25,7 @@ if _project_root not in sys.path:
 import numpy as np
 import cv2
 import h5py
+import torch
 
 CITYSCAPES_CLASS_NAMES = [
     'road', 'sidewalk', 'building', 'wall', 'fence', 'pole',
@@ -72,6 +72,8 @@ def main():
                         help="evaluate at full resolution")
     args = parser.parse_args()
 
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
     output_dir = args.output_dir if args.output_dir else args.pred_dir
 
     # Parse val.txt
@@ -83,12 +85,13 @@ def main():
     # Open ground truth HDF5
     h5_f = h5py.File(LABEL_FILE, 'r')
 
-    # Threshold grid for ODS sweep
+    # Threshold grid for ODS sweep (PyTorch on device for multi-threaded CPU or GPU)
     num_thresh = 99
     thresholds = np.linspace(0.01, 0.99, num_thresh)
-    total_tp = np.zeros((NUM_CLS, num_thresh), dtype=np.float64)
-    total_fp = np.zeros((NUM_CLS, num_thresh), dtype=np.float64)
-    total_fn = np.zeros((NUM_CLS, num_thresh), dtype=np.float64)
+    thresholds_t = torch.from_numpy(thresholds).float().to(device)
+    total_tp = torch.zeros((NUM_CLS, num_thresh), dtype=torch.float64, device=device)
+    total_fp = torch.zeros((NUM_CLS, num_thresh), dtype=torch.float64, device=device)
+    total_fn = torch.zeros((NUM_CLS, num_thresh), dtype=torch.float64, device=device)
 
     for idx in range(len(image_paths)):
         # Derive image base name (matches what get_results_for_benchmark.py saves)
@@ -106,19 +109,24 @@ def main():
             pred = cv2.resize(pred, (eval_w, eval_h), interpolation=cv2.INTER_LINEAR)
             gt = cv2.resize(gt, (eval_w, eval_h), interpolation=cv2.INTER_NEAREST)
 
-        # Vectorized accumulation across all thresholds per class
+        pred_t = torch.from_numpy(pred).float().to(device)
+        gt_t = torch.from_numpy(gt.astype(np.float32)).to(device)
         for k in range(NUM_CLS):
-            pred_k = pred[:, :, k][:, :, np.newaxis]           # (H, W, 1)
-            gt_k = gt[:, :, k].astype(bool)                     # (H, W)
-            pred_bin = pred_k >= thresholds[np.newaxis, np.newaxis, :]  # (H, W, num_thresh)
-            gt_exp = gt_k[:, :, np.newaxis]                     # (H, W, 1)
-            total_tp[k] += (pred_bin & gt_exp).sum(axis=(0, 1))
-            total_fp[k] += (pred_bin & ~gt_exp).sum(axis=(0, 1))
-            total_fn[k] += (~pred_bin & gt_exp).sum(axis=(0, 1))
+            pred_k = pred_t[:, :, k:k + 1]                    # (H, W, 1)
+            gt_k = gt_t[:, :, k]                              # (H, W)
+            pred_bin = (pred_k >= thresholds_t.view(1, 1, -1)).float()  # (H, W, num_thresh)
+            gt_exp = gt_k.unsqueeze(-1)                       # (H, W, 1)
+            total_tp[k] += (pred_bin * gt_exp).sum(dim=(0, 1))
+            total_fp[k] += (pred_bin * (1 - gt_exp)).sum(dim=(0, 1))
+            total_fn[k] += ((1 - pred_bin) * gt_exp).sum(dim=(0, 1))
 
         print('evaluated: [{}/{}] {}'.format(idx + 1, len(image_paths), image_name))
 
     h5_f.close()
+
+    total_tp = total_tp.cpu().numpy()
+    total_fp = total_fp.cpu().numpy()
+    total_fn = total_fn.cpu().numpy()
 
     # Compute metrics
     precision = total_tp / (total_tp + total_fp + 1e-10)
