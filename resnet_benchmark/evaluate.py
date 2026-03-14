@@ -141,7 +141,7 @@ def main():
     ap_per_class = np.zeros(NUM_CLS)
     for k in range(NUM_CLS):
         sorted_idx = np.argsort(recall[k])
-        ap_per_class[k] = np.trapz(precision[k][sorted_idx], recall[k][sorted_idx])
+        ap_per_class[k] = np.trapezoid(precision[k][sorted_idx], recall[k][sorted_idx])
 
     mean_ods = np.mean(ods_per_class)
     mean_ap = np.mean(ap_per_class)
