@@ -125,8 +125,7 @@ def run_inference(
         inference_times.append((img_base_name_noext, elapsed))
 
         for cls_idx in range(NUM_CLS):
-            im_arr = np.empty((height, width), np.uint8)
-            im_arr = (score_output[:, :, cls_idx].data.cpu().numpy()) * 255.0
+            im_arr = (score_output[:, :, cls_idx].data.cpu().numpy() * 255.0).clip(0, 255).astype(np.uint8)
             imwrite(os.path.join(output_dir, str(cls_idx), img_base_name_noext + '.png'), im_arr)
         print('processed: {} ({:.3f}s)'.format(test_lst[idx_img], elapsed))
         del score_feats5, score_fuse_feats, score_output, processed_img_var, processed_img

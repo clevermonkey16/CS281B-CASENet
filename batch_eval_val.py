@@ -2,12 +2,10 @@
 Run CASENet inference on all Cityscapes val images and then evaluate.
 
 Invokes get_results_for_benchmark.py once over val.txt, then evaluate.py once.
-Supports optional parallel sharding (--num_workers > 1) for faster inference.
 """
 
 import argparse
 import os
-import shutil
 import subprocess
 import sys
 
@@ -53,12 +51,6 @@ def main():
         default="",
         help="Directory for evaluation CSV (default: same as pred_dir)",
     )
-    parser.add_argument(
-        "--num_workers",
-        type=int,
-        default=1,
-        help="Number of parallel inference workers (default: 1 = serial)",
-    )
     args = parser.parse_args()
 
     val_list_path = os.path.join(args.data_root, args.val_list)
@@ -71,62 +63,20 @@ def main():
 
     eval_output_dir = args.eval_output_dir if args.eval_output_dir else args.pred_dir
 
-    if args.num_workers <= 1:
-        # Serial: one inference run over full val list, then evaluate
-        inference_script = os.path.join(script_dir, "get_results_for_benchmark.py")
-        cmd_inference = [
-            sys.executable,
-            inference_script,
-            "-m", args.model,
-            "-l", val_list_path,
-            "-d", args.data_root,
-            "-o", args.pred_dir,
-        ]
-        print("Running inference on full val set...")
-        ret = subprocess.run(cmd_inference, cwd=script_dir)
-        if ret.returncode != 0:
-            print("Inference failed with exit code {}".format(ret.returncode), file=sys.stderr)
-            sys.exit(ret.returncode)
-
-        eval_script = os.path.join(script_dir, "evaluate.py")
-        cmd_eval = [
-            sys.executable,
-            eval_script,
-            "-p", args.pred_dir,
-            "-l", val_list_path,
-            "-o", eval_output_dir,
-        ]
-        print("Running evaluation...")
-        ret = subprocess.run(cmd_eval, cwd=script_dir)
-        if ret.returncode != 0:
-            print("Evaluation failed with exit code {}".format(ret.returncode), file=sys.stderr)
-            sys.exit(ret.returncode)
-        print("Done. Metrics in {}".format(eval_output_dir))
-        return
-
-    # Parallel: run N inference processes using deterministic sharding (no temp files)
     inference_script = os.path.join(script_dir, "get_results_for_benchmark.py")
-    processes = []
-    for shard_idx in range(args.num_workers):
-        cmd = [
-            sys.executable,
-            inference_script,
-            "-m", args.model,
-            "-l", val_list_path,
-            "-d", args.data_root,
-            "-o", args.pred_dir,
-            "--shard_idx", str(shard_idx),
-            "--num_shards", str(args.num_workers),
-        ]
-        p = subprocess.Popen(cmd, cwd=script_dir)
-        processes.append(p)
-
-    for i, p in enumerate(processes):
-        p.wait()
-        if p.returncode != 0:
-            print("Inference shard {} failed with exit code {}".format(i, p.returncode), file=sys.stderr)
-            sys.exit(p.returncode)
-    print("All inference shards finished.")
+    cmd_inference = [
+        sys.executable,
+        inference_script,
+        "-m", args.model,
+        "-l", val_list_path,
+        "-d", args.data_root,
+        "-o", args.pred_dir,
+    ]
+    print("Running inference on full val set...")
+    ret = subprocess.run(cmd_inference, cwd=script_dir)
+    if ret.returncode != 0:
+        print("Inference failed with exit code {}".format(ret.returncode), file=sys.stderr)
+        sys.exit(ret.returncode)
 
     eval_script = os.path.join(script_dir, "evaluate.py")
     cmd_eval = [
