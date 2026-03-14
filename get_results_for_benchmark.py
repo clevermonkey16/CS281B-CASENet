@@ -48,9 +48,20 @@ if __name__ == "__main__":
                     else os.path.join(args.image_dir, x)
                     for x in ori_test_lst]
     else:
-        image_file = os.path.join(args.image_dir, args.image_file)
+        # Handle single-image input consistently with list case:
+        # if the provided path is "dataset-absolute" (starts with '/'),
+        # prepend image_dir by simple concatenation instead of os.path.join,
+        # so that '/leftImg8bit/val/...' works like entries in val.txt.
+        if args.image_dir != '':
+            if os.path.isabs(args.image_file):
+                image_file = args.image_dir + args.image_file
+            else:
+                image_file = os.path.join(args.image_dir, args.image_file)
+        else:
+            image_file = args.image_file
+
         if os.path.exists(image_file):
-            ori_test_list = [args.image_file]
+            ori_test_lst = [args.image_file]
             test_lst = [image_file]
         else:
             raise IOError('nothing to be tested!')
@@ -65,36 +76,30 @@ if __name__ == "__main__":
 
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
-        for cls_idx in xrange(num_cls):
+        for cls_idx in range(num_cls):
             dir_path = os.path.join(args.output_dir, str(cls_idx))
             if not os.path.exists(dir_path):
                 os.makedirs(dir_path)
 
-    # Define normalization for data    
+    # Define normalization for data (no resizing: model is fully convolutional, accepts any size)
     normalize = transforms.Normalize(mean=[104.008, 116.669, 122.675], std=[1, 1, 1])
-    crop_size = 632
-    
+
     img_transform = transforms.Compose([
                     RGB2BGR(roll=True),
                     ToTorchFormatTensor(div=False),
                     normalize,
                     ])
-    
-    for idx_img in xrange(len(test_lst)):
+
+    for idx_img in range(len(test_lst)):
         img = Image.open(test_lst[idx_img]).convert('RGB')
-        processed_img = img_transform(img).unsqueeze(0) # 1 X 3 X H X W
+        processed_img = img_transform(img).unsqueeze(0)  # 1 X 3 X H X W (original size)
         height = processed_img.size()[2]
         width = processed_img.size()[3]
-        if crop_size < height or crop_size < width:
-            raise ValueError("Input image size must be smaller than crop size!")
-        pad_h = crop_size - height
-        pad_w = crop_size - width
-        padded_processed_img = F.pad(processed_img, (0, pad_w, 0, pad_h), "constant", 0).data
-        processed_img_var = utils.check_gpu(None, padded_processed_img) # change None to GPU Id if needed
+        processed_img_var = utils.check_gpu(None, processed_img)  # change None to GPU Id if needed
         score_feats5, score_fuse_feats = model(processed_img_var) # 1 X 19 X CROP_SIZE X CROP_SIZE
         
         score_output = sigmoid(score_fuse_feats.transpose(1,3).transpose(1,2)).squeeze(0)[:height, :width, :] # H X W X 19
-        for cls_idx in xrange(num_cls):
+        for cls_idx in range(num_cls):
             # Convert binary prediction to uint8
             im_arr = np.empty((height, width), np.uint8)
             im_arr = (score_output[:,:,cls_idx].data.cpu().numpy())*255.0
