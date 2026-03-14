@@ -1,6 +1,8 @@
 import os
 import sys
 import argparse
+import time
+import csv
 
 import numpy as np
 import cv2
@@ -90,27 +92,44 @@ if __name__ == "__main__":
                     normalize,
                     ])
 
+    inference_times = []  # list of (image_name, time_sec)
+
     for idx_img in range(len(test_lst)):
         img = Image.open(test_lst[idx_img]).convert('RGB')
         processed_img = img_transform(img).unsqueeze(0)  # 1 X 3 X H X W (original size)
         height = processed_img.size()[2]
         width = processed_img.size()[3]
         processed_img_var = utils.check_gpu(None, processed_img)  # change None to GPU Id if needed
-        score_feats5, score_fuse_feats = model(processed_img_var) # 1 X 19 X CROP_SIZE X CROP_SIZE
-        
-        score_output = sigmoid(score_fuse_feats.transpose(1,3).transpose(1,2)).squeeze(0)[:height, :width, :] # H X W X 19
+
+        t0 = time.perf_counter()
+        score_feats5, score_fuse_feats = model(processed_img_var)  # 1 X 19 X CROP_SIZE X CROP_SIZE
+        score_output = sigmoid(score_fuse_feats.transpose(1, 3).transpose(1, 2)).squeeze(0)[:height, :width, :]  # H X W X 19
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+        elapsed = time.perf_counter() - t0
+
+        img_base_name_noext = os.path.splitext(os.path.basename(test_lst[idx_img]))[0]
+        inference_times.append((img_base_name_noext, elapsed))
+
         for cls_idx in range(num_cls):
             # Convert binary prediction to uint8
             im_arr = np.empty((height, width), np.uint8)
-            im_arr = (score_output[:,:,cls_idx].data.cpu().numpy())*255.0
+            im_arr = (score_output[:, :, cls_idx].data.cpu().numpy()) * 255.0
             # print(im_arr)
-             
+
             # Store value into img
-            img_base_name_noext = os.path.splitext(os.path.basename(test_lst[idx_img]))[0]
             if not os.path.exists(os.path.join(args.output_dir, str(cls_idx))):
                 os.makedirs(os.path.join(args.output_dir, str(cls_idx)))
-            imwrite(os.path.join(args.output_dir, str(cls_idx), img_base_name_noext+'.png'), im_arr)
-            print('processed: '+test_lst[idx_img])
-    
+            imwrite(os.path.join(args.output_dir, str(cls_idx), img_base_name_noext + '.png'), im_arr)
+        print('processed: {} ({:.3f}s)'.format(test_lst[idx_img], elapsed))
+
+    # Save inference times to CSV in output_dir
+    times_path = os.path.join(args.output_dir, 'inference_times.csv')
+    with open(times_path, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(['image', 'inference_time_sec'])
+        writer.writerows(inference_times)
+    print('Inference times written to {}'.format(times_path))
+
     print('Done!')
 
