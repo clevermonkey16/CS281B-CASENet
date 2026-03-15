@@ -370,6 +370,130 @@ class ResNet(nn.Module):
         else:
             return cropped_score_feats5, fused_feats
 
+class CASENet_MobileNetV3(nn.Module):
+    """
+    CASENet with MobileNetV3-Large backbone.
+
+    Side outputs are tapped at 4 intermediate scales of MobileNetV3-Large:
+      - Side 1: after features[1]  (stride  2, 16 ch)
+      - Side 2: after features[3]  (stride  4, 24 ch)
+      - Side 3: after features[6]  (stride  8, 40 ch)
+      - Side 5: after features[16] (stride 32, 960 ch) -- class-aware
+    All sides are upsampled to match the Side-1 spatial resolution (H/2 x W/2),
+    then fused with a grouped 1x1 convolution.
+    """
+
+    # Indices into MobileNetV3-Large .features where each side ends
+    _SIDE_INDICES = (1, 3, 6, 16)
+    # Output channels at each of those positions
+    _SIDE_CHANNELS = (16, 24, 40, 960)
+
+    def __init__(self, num_classes=19):
+        super(CASENet_MobileNetV3, self).__init__()
+        self.num_classes = num_classes
+
+        backbone = models.mobilenet_v3_large(weights=None)
+        # Split backbone.features into 4 sequential stages
+        feats = backbone.features
+        self.stage1 = nn.Sequential(*feats[0:2])   # -> stride 2
+        self.stage2 = nn.Sequential(*feats[2:4])   # -> stride 4
+        self.stage3 = nn.Sequential(*feats[4:7])   # -> stride 8
+        self.stage4 = nn.Sequential(*feats[7:17])  # -> stride 32
+
+        # Side score layers (1x1 conv)
+        self.score_edge_side1 = nn.Conv2d(16, 1, kernel_size=1, bias=True)
+        self.score_edge_side2 = nn.Conv2d(24, 1, kernel_size=1, bias=True)
+        self.score_edge_side3 = nn.Conv2d(40, 1, kernel_size=1, bias=True)
+        self.score_cls_side5 = nn.Conv2d(960, num_classes, kernel_size=1, bias=True)
+
+        # Fusion: 4 maps per class -> 1 per class
+        self.ce_fusion = nn.Conv2d(num_classes * 4, num_classes,
+                                   kernel_size=1, groups=num_classes, bias=True)
+
+        self.slice_layer = SliceLayer()
+        self.concat_layer = ConcatLayer()
+
+        # Init fusion weights
+        self.ce_fusion.weight.data.fill_(0.25)
+        self.ce_fusion.bias.data.zero_()
+
+    def _upsample_to(self, x, target):
+        """Bilinear upsample x to match target's spatial dims."""
+        if x.shape[2:] != target.shape[2:]:
+            return nn.functional.interpolate(
+                x, size=target.shape[2:], mode='bilinear', align_corners=False)
+        return x
+
+    def forward(self, x, for_vis=False):
+        input_size = x.shape[2:]  # H x W
+
+        # Backbone stages
+        s1 = self.stage1(x)   # B x 16 x H/2 x W/2
+        s2 = self.stage2(s1)  # B x 24 x H/4 x W/4
+        s3 = self.stage3(s2)  # B x 40 x H/8 x W/8
+        s5 = self.stage4(s3)  # B x 960 x H/32 x W/32
+
+        # Side scores (fused at H/2 x W/2 internal resolution)
+        score_feats1 = self.score_edge_side1(s1)       # B x 1 x H/2 x W/2
+        score_feats2 = self._upsample_to(
+            self.score_edge_side2(s2), score_feats1)    # B x 1 x H/2 x W/2
+        score_feats3 = self._upsample_to(
+            self.score_edge_side3(s3), score_feats1)    # B x 1 x H/2 x W/2
+        score_feats5 = self._upsample_to(
+            self.score_cls_side5(s5), score_feats1)     # B x C x H/2 x W/2
+
+        # Slice class-aware side into per-class maps and concat with shared sides
+        sliced_list = self.slice_layer(score_feats5)   # list of B x 1 x H/2 x W/2
+        final_sliced_list = []
+        for s in sliced_list:
+            final_sliced_list.append(s)
+            final_sliced_list.append(score_feats1)
+            final_sliced_list.append(score_feats2)
+            final_sliced_list.append(score_feats3)
+
+        concat_feats = self.concat_layer(final_sliced_list, dim=1)
+        fused_feats = self.ce_fusion(concat_feats)     # B x C x H/2 x W/2
+
+        # Upsample outputs to input resolution to match target label size
+        score_feats5 = nn.functional.interpolate(
+            score_feats5, size=input_size, mode='bilinear', align_corners=False)
+        fused_feats = nn.functional.interpolate(
+            fused_feats, size=input_size, mode='bilinear', align_corners=False)
+
+        if for_vis:
+            score_feats1 = nn.functional.interpolate(
+                score_feats1, size=input_size, mode='bilinear', align_corners=False)
+            score_feats2 = nn.functional.interpolate(
+                score_feats2, size=input_size, mode='bilinear', align_corners=False)
+            score_feats3 = nn.functional.interpolate(
+                score_feats3, size=input_size, mode='bilinear', align_corners=False)
+            return score_feats1, score_feats2, score_feats3, score_feats5, fused_feats
+        else:
+            return score_feats5, fused_feats
+
+
+def CASENet_mobilenetv3(pretrained=False, num_classes=19):
+    """Constructs a CASENet model with MobileNetV3-Large backbone.
+    Args:
+        pretrained (bool): If True, initializes backbone with ImageNet weights.
+        num_classes (int): Number of edge classes (default: 19 for Cityscapes).
+    """
+    model = CASENet_MobileNetV3(num_classes=num_classes)
+    if pretrained:
+        # Load ImageNet-pretrained MobileNetV3-Large weights into backbone stages
+        pretrained_backbone = models.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.DEFAULT)
+        feats = pretrained_backbone.features
+        pretrained_stage1 = nn.Sequential(*feats[0:2])
+        pretrained_stage2 = nn.Sequential(*feats[2:4])
+        pretrained_stage3 = nn.Sequential(*feats[4:7])
+        pretrained_stage4 = nn.Sequential(*feats[7:17])
+        model.stage1.load_state_dict(pretrained_stage1.state_dict())
+        model.stage2.load_state_dict(pretrained_stage2.state_dict())
+        model.stage3.load_state_dict(pretrained_stage3.state_dict())
+        model.stage4.load_state_dict(pretrained_stage4.state_dict())
+    return model
+
+
 def CASENet_resnet101(pretrained=False, num_classes=19):
     """Constructs a modified ResNet-101 model for CASENet.
     Args:
