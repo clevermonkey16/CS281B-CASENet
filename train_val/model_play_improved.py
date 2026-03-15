@@ -44,7 +44,7 @@ def train(args, train_loader, model, optimizer, epoch, curr_lr, win_feats5, win_
         bs = img.size()[0] * accumulation_steps
 
         # Forward pass in FP16 if enabled
-        with torch.cuda.amp.autocast(enabled=use_fp16):
+        with torch.amp.autocast('cuda', enabled=use_fp16):
             score_feats5, fused_feats = model(img_var) # BS X NUM_CLASSES X 472 X 472
 
         # Loss computed in FP32 for numerical stability
@@ -129,7 +129,7 @@ def validate(args, val_loader, model, epoch, win_feats5, win_fusion, viz, global
 
             bs = img.size()[0]
 
-            with torch.cuda.amp.autocast(enabled=use_fp16):
+            with torch.amp.autocast('cuda', enabled=use_fp16):
                 score_feats5, fused_feats = model(img_var) # BS X NUM_CLASSES X 472 X 472
 
             # Loss in FP32 for numerical stability
@@ -182,23 +182,27 @@ def WeightedMultiLabelSigmoidLoss(model_output, target):
 
     return loss.mean(dim=0).sum()
 
-def WeightedMultiLabelFocalLoss(model_output, target, gamma=2.0, alpha=0.75):
+def WeightedMultiLabelFocalLoss(model_output, target, gamma=2.0):
     """
-    Focal loss for multi-label edge detection.
+    Hybrid focal loss: per-sample adaptive weights + focal modulation.
     model_output: BS X NUM_CLASSES X H X W
     target: BS X H X W X NUM_CLASSES
     gamma: focusing parameter — down-weights easy examples
-    alpha: weight for positive (edge) class
     """
+    # Per-sample adaptive weights (from original loss)
+    weight_sum = utils.check_gpu(0, target.sum(dim=1).sum(dim=1).sum(dim=1).float().data) # BS
+    edge_weight = utils.check_gpu(0, weight_sum.data / float(target.size()[1]*target.size()[2]))
+    non_edge_weight = utils.check_gpu(0, (target.size()[1]*target.size()[2]-weight_sum.data) / float(target.size()[1]*target.size()[2]))
+
     one_sigmoid_out = sigmoid(model_output)
     zero_sigmoid_out = 1 - one_sigmoid_out
     target = target.transpose(1,3).transpose(2,3).float() # BS X NUM_CLASSES X H X W
 
     # Focal modulating factors
-    pos_focal_weight = (zero_sigmoid_out) ** gamma   # hard positives get higher weight
-    neg_focal_weight = (one_sigmoid_out) ** gamma     # hard negatives get higher weight
+    pos_focal_weight = zero_sigmoid_out ** gamma   # hard positives get higher weight
+    neg_focal_weight = one_sigmoid_out ** gamma     # hard negatives get higher weight
 
-    loss = -alpha * pos_focal_weight * target * torch.log(one_sigmoid_out.clamp(min=1e-10)) - \
-           (1 - alpha) * neg_focal_weight * (1 - target) * torch.log(zero_sigmoid_out.clamp(min=1e-10))
+    loss = -non_edge_weight.unsqueeze(1).unsqueeze(2).unsqueeze(3) * pos_focal_weight * target * torch.log(one_sigmoid_out.clamp(min=1e-10)) - \
+           edge_weight.unsqueeze(1).unsqueeze(2).unsqueeze(3) * neg_focal_weight * (1 - target) * torch.log(zero_sigmoid_out.clamp(min=1e-10))
 
     return loss.mean(dim=0).sum()

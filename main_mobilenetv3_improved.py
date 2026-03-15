@@ -34,7 +34,6 @@ args = config.get_args()
 improvement_parser = argparse.ArgumentParser(parents=[], add_help=False)
 improvement_parser.add_argument('--focal-loss', action='store_true', help='Use focal loss instead of weighted BCE')
 improvement_parser.add_argument('--gamma', default=2.0, type=float, help='Focal loss gamma (default: 2.0)')
-improvement_parser.add_argument('--alpha', default=0.75, type=float, help='Focal loss alpha for positive class (default: 0.75)')
 improvement_parser.add_argument('--augmentation', action='store_true', help='Use enhanced data augmentation (ColorJitter, GaussianBlur, GaussianNoise, RandomRotation)')
 improvement_parser.add_argument('--random-erasing', action='store_true', help='Use RandomErasing augmentation (can combine with --augmentation)')
 improvement_parser.add_argument('--fp16', action='store_true', help='Use FP16 mixed precision training')
@@ -56,22 +55,22 @@ viz = visdom.Visdom(env=f'CASENet-MobileNetV3{suffix}')
 def main():
     global args, imp_args, suffix
     print("config:{0}".format(args))
-    print("improvements: focal_loss={0} gamma={1} alpha={2} augmentation={3} random_erasing={4} fp16={5}".format(
-        imp_args.focal_loss, imp_args.gamma, imp_args.alpha, imp_args.augmentation, imp_args.random_erasing, imp_args.fp16))
+    print("improvements: focal_loss={0} gamma={1} augmentation={2} random_erasing={3} fp16={4}".format(
+        imp_args.focal_loss, imp_args.gamma, imp_args.augmentation, imp_args.random_erasing, imp_args.fp16))
 
     checkpoint_dir = args.checkpoint_folder + suffix if suffix else args.checkpoint_folder + "_improved"
     os.makedirs(checkpoint_dir, exist_ok=True)
 
     # Select loss function
     if imp_args.focal_loss:
-        loss_fn = partial(model_play.WeightedMultiLabelFocalLoss, gamma=imp_args.gamma, alpha=imp_args.alpha)
-        print("Using Focal Loss (gamma={0}, alpha={1})".format(imp_args.gamma, imp_args.alpha))
+        loss_fn = partial(model_play.WeightedMultiLabelFocalLoss, gamma=imp_args.gamma)
+        print("Using Focal Loss (gamma={0}, per-sample adaptive weights)".format(imp_args.gamma))
     else:
         loss_fn = model_play.WeightedMultiLabelSigmoidLoss
         print("Using Weighted Multi-Label Sigmoid Loss (baseline)")
 
     # FP16 mixed precision
-    scaler = torch.cuda.amp.GradScaler() if imp_args.fp16 else None
+    scaler = torch.amp.GradScaler('cuda') if imp_args.fp16 else None
     if imp_args.fp16:
         print("Using FP16 mixed precision training")
 

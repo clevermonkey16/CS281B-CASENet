@@ -46,7 +46,7 @@ def get_args():
                         choices=['resnet101', 'mobilenetv3'],
                         help='backbone architecture (default: mobilenetv3)')
 
-    args = parser.parse_args()
+    args, _ = parser.parse_known_args()
 
     return args
 
