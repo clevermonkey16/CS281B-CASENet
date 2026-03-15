@@ -41,7 +41,7 @@ def main():
     min_val_loss = 999999999
 
     title = 'train|val loss '
-    init = np.NaN
+    init = np.nan
     win_feats5 = viz.line(
         X=np.column_stack((np.array([init]), np.array([init]))),
         Y=np.column_stack((np.array([init]), np.array([init]))),
@@ -81,10 +81,10 @@ def main():
 
     for epoch in range(args.start_epoch, args.epochs):
         torch.cuda.empty_cache()
-        curr_lr = utils.adjust_learning_rate(args.lr, args, optimizer, global_step, args.lr_steps, args.acc_steps)
+        curr_lr = utils.adjust_learning_rate(args.lr, args, optimizer, global_step, args.lr_steps)
 
         global_step = model_play.train(args, train_loader, model, optimizer, epoch, curr_lr,\
-                                 win_feats5, win_fusion, viz, global_step)
+                                 win_feats5, win_fusion, viz, global_step, args.acc_steps)
         torch.cuda.empty_cache()
 
         curr_loss = model_play.validate(args, val_loader, model, epoch, win_feats5, win_fusion, viz, global_step)
@@ -111,18 +111,19 @@ def main():
 def get_model_policy(model):
     score_feats_conv_weight = []
     score_feats_conv_bias = []
-    other_pts = []
+    score_param_ids = set()
     for m in model.named_modules():
         if m[0] != '' and m[0] != 'module':
             if ('score' in m[0] or 'fusion' in m[0]) and isinstance(m[1], torch.nn.Conv2d):
                 ps = list(m[1].parameters())
                 score_feats_conv_weight.append(ps[0])
+                score_param_ids.add(id(ps[0]))
                 if len(ps) == 2:
                     score_feats_conv_bias.append(ps[1])
+                    score_param_ids.add(id(ps[1]))
                 print("Totally new layer:{0}".format(m[0]))
-            else: # For all the other module that is not totally new layer.
-                ps = list(m[1].parameters())
-                other_pts.extend(ps)
+
+    other_pts = [p for p in model.parameters() if id(p) not in score_param_ids]
 
     return [
             {'params': score_feats_conv_weight, 'lr_mult': 10, 'name': 'score_conv_weight'},
