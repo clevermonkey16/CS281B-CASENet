@@ -50,11 +50,11 @@ if __name__ == "__main__":
         test_bitfield_equivalence()
         sys.exit(0)
     torch.set_num_threads(8)
-    f = open("/Users/stevenjiang/Documents/GitHub/CASENet/cityscapes-preprocess/data_proc/val.txt", 'r')
+    f = open("cityscapes-preprocess/data_proc/train.txt", 'r')
     lines = f.readlines()
-    root_folder = "/Users/stevenjiang/Documents/GitHub/CASENet/cityscapes-preprocess/data_proc/"
+    root_folder = "cityscapes-preprocess/data_proc/"
 
-    h5_file = h5py.File("val_label_binary_np.h5", 'w')
+    h5_file = h5py.File("train_label_binary_np.h5", 'w')
     for ori_line in tqdm(lines):
         line = ori_line.split()
         bin_name = line[1]
