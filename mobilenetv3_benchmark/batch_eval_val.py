@@ -15,7 +15,7 @@ def main():
     project_root = os.path.abspath(os.path.join(script_dir, '..'))
     default_data_root = os.path.join(project_root, "cityscapes-preprocess", "data_proc")
     default_val_list = "val.txt"
-    default_pred_dir = os.path.join(project_root, "output", "val_pred")
+    default_pred_dir = os.path.join(project_root, "output", "val_pred_mobilenetv3")
 
     parser = argparse.ArgumentParser(
         description="Batch run inference and evaluation on Cityscapes val set"

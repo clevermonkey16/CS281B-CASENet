@@ -44,7 +44,7 @@ def check_gpu(gpu, *args):
 
 def load_pretrained_model(model, pretrained_model_path):
     # Load trained model.
-    trained_model = torch.load(pretrained_model_path)
+    trained_model = torch.load(pretrained_model_path, weights_only=False)
     pretrained_dict = trained_model['state_dict']
     removed_prefix_pretrained_dict = {k.replace("module.", ""): v for k, v in pretrained_dict.items()}
     model_dict = model.state_dict()
@@ -89,7 +89,7 @@ def load_pretrained_model(model, pretrained_model_path):
 
 def load_official_pretrained_model(model, pretrained_model_path):
     # Load trained model.
-    trained_model = torch.load(pretrained_model_path)
+    trained_model = torch.load(pretrained_model_path, weights_only=False)
     model_dict = model.state_dict()
     
     for k in trained_model.keys():
