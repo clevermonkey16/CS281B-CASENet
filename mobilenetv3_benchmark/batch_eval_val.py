@@ -10,12 +10,41 @@ import subprocess
 import sys
 
 
+def _output_dir_from_model(project_root, model_path):
+    """Derive an output directory name from the model checkpoint path.
+
+    Looks at the parent directory and filename for known keywords
+    (e.g. 'focal', 'improved') and appends them as a suffix.
+    Falls back to the checkpoint filename stem if nothing else matches.
+    """
+    model_path = os.path.abspath(model_path)
+    parent_dir = os.path.basename(os.path.dirname(model_path))
+    stem = os.path.splitext(os.path.basename(model_path))[0]
+    # strip trailing .pth if double-extension like .pth.tar
+    if stem.endswith(".pth"):
+        stem = stem[:-4]
+
+    # collect tag parts from parent dir and filename
+    tags = []
+    for keyword in ("focal", "improved", "augment", "deep", "large"):
+        if keyword in parent_dir.lower() or keyword in stem.lower():
+            tags.append(keyword)
+
+    if tags:
+        suffix = "_".join(tags)
+        folder = "val_pred_{}".format(suffix)
+    else:
+        folder = "val_pred_{}".format(stem.replace(" ", "_"))
+
+    return os.path.join(project_root, "output", folder)
+
+
 def main():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.abspath(os.path.join(script_dir, '..'))
     default_data_root = os.path.join(project_root, "cityscapes-preprocess", "data_proc")
     default_val_list = "val.txt"
-    default_pred_dir = os.path.join(project_root, "output", "val_pred_mobilenetv3")
+    default_pred_dir = None  # will be derived from model path if not specified
 
     parser = argparse.ArgumentParser(
         description="Batch run inference and evaluation on Cityscapes val set"
@@ -44,7 +73,7 @@ def main():
         "--pred_dir",
         type=str,
         default=default_pred_dir,
-        help="Directory for prediction outputs (default: output/val_pred)",
+        help="Directory for prediction outputs (default: auto-derived from model path)",
     )
     parser.add_argument(
         "--eval_output_dir",
@@ -53,6 +82,11 @@ def main():
         help="Directory for evaluation CSV (default: same as pred_dir)",
     )
     args = parser.parse_args()
+
+    # Auto-derive output dir from model path if not explicitly provided
+    if args.pred_dir is None:
+        args.pred_dir = _output_dir_from_model(project_root, args.model)
+        print("Auto output dir: {}".format(args.pred_dir))
 
     val_list_path = os.path.join(args.data_root, args.val_list)
     if not os.path.isfile(val_list_path):
