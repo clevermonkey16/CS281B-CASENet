@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 
 class CityscapesData(data.Dataset):
     
-    def __init__(self, img_folder, label_folder, anno_txt, hdf5_file_name, input_size, cls_num, img_transform, label_transform):
+    def __init__(self, img_folder, label_folder, anno_txt, label_npy_dir, input_size, cls_num, img_transform, label_transform):
 
         self.img_folder = img_folder
         self.label_folder = label_folder
@@ -26,7 +26,7 @@ class CityscapesData(data.Dataset):
         self.img_transform = img_transform
         self.label_transform = label_transform
 
-        self.h5_f = h5py.File(hdf5_file_name, 'r')
+        self.label_npy_dir = label_npy_dir
 
         # Convert txt file to dict so that can use index to get filename.
         cnt = 0
@@ -36,7 +36,7 @@ class CityscapesData(data.Dataset):
         lines = f.readlines()
         for line in lines:
             row_data = line.split()
-            img_name = row_data[0]
+            img_name = row_data[0].lstrip('/')
             label_name = row_data[1]
             self.idx2name_dict[cnt] = {}
             self.idx2name_dict[cnt]['img'] = img_name
@@ -58,11 +58,12 @@ class CityscapesData(data.Dataset):
         random.seed(seed)
         processed_img = self.img_transform(img) # 3 X H X W
 
-        np_data = self.h5_f['data/'+label_name.replace('/', '_').replace('bin', 'npy')]
+        npy_key = label_name.replace('/', '_').replace('bin', 'npy')
+        np_data = np.load(os.path.join(self.label_npy_dir, npy_key))
 
         label_data = []
         num_cls = np_data.shape[2]
-        for k in xrange(num_cls):
+        for k in range(num_cls):
             if np_data[:,:,num_cls-1-k].sum() > 0: # The order is reversed to be consistent with class name idx in official.
                 random.seed(seed) # Before transform, set random seed same as img transform, to keep consistent!
                 label_tensor = self.label_transform(torch.from_numpy(np_data[:, :, num_cls-1-k]).unsqueeze(0).float())
@@ -70,8 +71,8 @@ class CityscapesData(data.Dataset):
                 label_tensor = torch.zeros(1, self.input_size, self.input_size).float()
             label_data.append(label_tensor.squeeze(0).long())
         label_data = torch.stack(label_data).transpose(0,1).transpose(1,2) # N X H X W -> H X W X N
-        print("label_data.sum():{0}".format(label_data.sum()))
-        print("label_data.max():{0}".format(label_data.max()))     
+        # print("label_data.sum():{0}".format(label_data.sum()))
+        # print("label_data.max():{0}".format(label_data.max()))
         return processed_img, label_data
         # processed_img: 3 X 472(H) X 472(W)
         # label tensor: 472(H) X 472(W) X 19
