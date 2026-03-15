@@ -56,6 +56,7 @@ class CityscapesData(data.Dataset):
         img = Image.open(img_path).convert('RGB') # W X H
 
         random.seed(seed)
+        torch.manual_seed(seed)
         processed_img = self.img_transform(img) # 3 X H X W
 
         npy_key = label_name.replace('/', '_').replace('bin', 'npy')
@@ -66,6 +67,7 @@ class CityscapesData(data.Dataset):
         for k in range(num_cls):
             if np_data[:,:,num_cls-1-k].sum() > 0: # The order is reversed to be consistent with class name idx in official.
                 random.seed(seed) # Before transform, set random seed same as img transform, to keep consistent!
+                torch.manual_seed(seed)
                 label_tensor = self.label_transform(torch.from_numpy(np_data[:, :, num_cls-1-k]).unsqueeze(0).float())
             else: # ALL zeros, don't need transform, maybe a bit faster?..
                 label_tensor = torch.zeros(1, self.input_size, self.input_size).float()
