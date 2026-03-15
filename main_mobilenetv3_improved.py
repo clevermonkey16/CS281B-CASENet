@@ -22,9 +22,6 @@ from modules.CASENet import CASENet_mobilenetv3
 # For training and validation
 import train_val.model_play_improved as model_play
 
-# For visualization
-import visdom
-
 # For settings
 import config
 
@@ -37,6 +34,17 @@ improvement_parser.add_argument('--gamma', default=2.0, type=float, help='Focal 
 improvement_parser.add_argument('--augmentation', action='store_true', help='Use enhanced data augmentation (ColorJitter, GaussianBlur, GaussianNoise, RandomRotation)')
 improvement_parser.add_argument('--random-erasing', action='store_true', help='Use RandomErasing augmentation (can combine with --augmentation)')
 improvement_parser.add_argument('--fp16', action='store_true', help='Use FP16 mixed precision training')
+improvement_parser.add_argument('--visdom', action='store_true', help='Enable Visdom visualization')
+improvement_parser.add_argument('--quantize', type=str, default=None, metavar='CHECKPOINT',
+                                help='Post-training quantization: provide path to trained checkpoint. Produces FP32, FP16, and INT8 versions.')
+improvement_parser.add_argument('--distillation', action='store_true',
+                                help='Enable knowledge distillation from ResNet-101 teacher')
+improvement_parser.add_argument('--teacher-path', type=str, default='pretrained_models/model_casenet.pth.tar',
+                                help='Path to teacher model checkpoint (raw state dict)')
+improvement_parser.add_argument('--alpha', type=float, default=0.7,
+                                help='Hard loss weight (1-alpha for distillation loss, default: 0.7)')
+improvement_parser.add_argument('--temperature', type=float, default=3.0,
+                                help='Distillation temperature (default: 3.0)')
 imp_args, _ = improvement_parser.parse_known_args()
 
 # Build experiment suffix from active flags
@@ -49,14 +57,74 @@ if imp_args.random_erasing:
     suffix += "_erase"
 if imp_args.fp16:
     suffix += "_fp16"
+if imp_args.distillation:
+    suffix += "_distill"
 
-viz = visdom.Visdom(env=f'CASENet-MobileNetV3{suffix}')
+def quantize_model(checkpoint_path, num_classes):
+    """Post-training quantization: saves FP32, FP16, and INT8 versions of a trained model."""
+    import torch.quantization
+
+    output_dir = os.path.dirname(checkpoint_path) or '.'
+    base_name = os.path.splitext(os.path.splitext(os.path.basename(checkpoint_path))[0])[0]  # strip .pth.tar
+
+    # Load model on CPU for quantization
+    model = CASENet_mobilenetv3(pretrained=False, num_classes=num_classes)
+    utils.load_pretrained_model(model, checkpoint_path)
+    model.eval()
+    model.cpu()
+
+    # 1. FP32 baseline
+    fp32_path = os.path.join(output_dir, f"{base_name}_fp32.pth")
+    torch.save(model.state_dict(), fp32_path)
+
+    # 2. FP16
+    fp16_model = CASENet_mobilenetv3(pretrained=False, num_classes=num_classes)
+    fp16_model.load_state_dict(model.state_dict())
+    fp16_model.half()
+    fp16_path = os.path.join(output_dir, f"{base_name}_fp16.pth")
+    torch.save(fp16_model.state_dict(), fp16_path)
+    del fp16_model
+
+    # 3. INT8 dynamic quantization
+    int8_model = torch.quantization.quantize_dynamic(
+        model, {nn.Conv2d, nn.Linear}, dtype=torch.qint8
+    )
+    int8_path = os.path.join(output_dir, f"{base_name}_int8.pth")
+    torch.save(int8_model.state_dict(), int8_path)
+    del int8_model
+
+    # Print results table
+    fp32_size = os.path.getsize(fp32_path) / (1024 * 1024)
+    fp16_size = os.path.getsize(fp16_path) / (1024 * 1024)
+    int8_size = os.path.getsize(int8_path) / (1024 * 1024)
+
+    print("\nPost-Training Quantization Results:")
+    print("-" * 50)
+    print(f"{'Format':<10} {'Size (MB)':<15} {'Reduction'}")
+    print("-" * 50)
+    print(f"{'FP32':<10} {fp32_size:<15.2f} {'1.0x (baseline)'}")
+    print(f"{'FP16':<10} {fp16_size:<15.2f} {fp32_size/fp16_size:.1f}x")
+    print(f"{'INT8':<10} {int8_size:<15.2f} {fp32_size/int8_size:.1f}x")
+    print("-" * 50)
+    print(f"Saved to: {output_dir}/")
+
 
 def main():
     global args, imp_args, suffix
     print("config:{0}".format(args))
-    print("improvements: focal_loss={0} gamma={1} augmentation={2} random_erasing={3} fp16={4}".format(
-        imp_args.focal_loss, imp_args.gamma, imp_args.augmentation, imp_args.random_erasing, imp_args.fp16))
+    print("improvements: focal_loss={0} gamma={1} augmentation={2} random_erasing={3} fp16={4} visdom={5} distillation={6}".format(
+        imp_args.focal_loss, imp_args.gamma, imp_args.augmentation, imp_args.random_erasing, imp_args.fp16, imp_args.visdom, imp_args.distillation))
+
+    # Post-training quantization mode — skip training entirely
+    if imp_args.quantize:
+        quantize_model(imp_args.quantize, args.cls_num)
+        return
+
+    if imp_args.visdom:
+        import visdom
+        viz = visdom.Visdom(env=f'CASENet-MobileNetV3{suffix}')
+    else:
+        viz = None
 
     checkpoint_dir = args.checkpoint_folder + suffix if suffix else args.checkpoint_folder + "_improved"
     os.makedirs(checkpoint_dir, exist_ok=True)
@@ -77,19 +145,21 @@ def main():
     global_step = 0
     min_val_loss = 999999999
 
-    title = 'train|val loss '
-    init = np.nan
-    win_feats5 = viz.line(
-        X=np.column_stack((np.array([init]), np.array([init]))),
-        Y=np.column_stack((np.array([init]), np.array([init]))),
-        opts={'title': title, 'xlabel': 'Iter', 'ylabel': 'Loss', 'legend': ['train_feats5', 'val_feats5']},
-    )
-
-    win_fusion = viz.line(
-        X=np.column_stack((np.array([init]), np.array([init]))),
-        Y=np.column_stack((np.array([init]), np.array([init]))),
-        opts={'title': title, 'xlabel': 'Iter', 'ylabel': 'Loss', 'legend': ['train_fusion', 'val_fusion']},
-    )
+    win_feats5 = None
+    win_fusion = None
+    if imp_args.visdom:
+        title = 'train|val loss '
+        init = np.nan
+        win_feats5 = viz.line(
+            X=np.column_stack((np.array([init]), np.array([init]))),
+            Y=np.column_stack((np.array([init]), np.array([init]))),
+            opts={'title': title, 'xlabel': 'Iter', 'ylabel': 'Loss', 'legend': ['train_feats5', 'val_feats5']},
+        )
+        win_fusion = viz.line(
+            X=np.column_stack((np.array([init]), np.array([init]))),
+            Y=np.column_stack((np.array([init]), np.array([init]))),
+            opts={'title': title, 'xlabel': 'Iter', 'ylabel': 'Loss', 'legend': ['train_fusion', 'val_fusion']},
+        )
 
     # Select dataloader based on augmentation flags
     if imp_args.augmentation or imp_args.random_erasing:
@@ -105,6 +175,24 @@ def main():
         model = torch.nn.DataParallel(model.cuda())
     else:
         model = model.cuda()
+
+    # Load and freeze teacher for distillation
+    teacher = None
+    if imp_args.distillation:
+        from modules.CASENet import CASENet_resnet101
+        teacher = CASENet_resnet101(pretrained=False, num_classes=args.cls_num)
+        utils.load_official_pretrained_model(teacher, imp_args.teacher_path)
+        teacher = teacher.cuda()
+        teacher.eval()
+        for p in teacher.parameters():
+            p.requires_grad = False
+        if imp_args.fp16:
+            teacher = teacher.half()
+        if args.multigpu:
+            teacher = torch.nn.DataParallel(teacher)
+        print("Teacher loaded from {0} (frozen, {1}), alpha={2}, T={3}".format(
+            imp_args.teacher_path, "FP16" if imp_args.fp16 else "FP32",
+            imp_args.alpha, imp_args.temperature))
 
     policies = get_model_policy(model) # Set the lr_mult=10 of new layer
     optimizer = torch.optim.SGD(policies, lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
@@ -129,7 +217,8 @@ def main():
 
         global_step = model_play.train(args, train_loader, model, optimizer, epoch, curr_lr,
                                  win_feats5, win_fusion, viz, global_step, args.acc_steps,
-                                 loss_fn=loss_fn, scaler=scaler, use_fp16=imp_args.fp16)
+                                 loss_fn=loss_fn, scaler=scaler, use_fp16=imp_args.fp16,
+                                 teacher=teacher, alpha=imp_args.alpha, temperature=imp_args.temperature)
         torch.cuda.empty_cache()
 
         curr_loss = model_play.validate(args, val_loader, model, epoch, win_feats5, win_fusion, viz, global_step,

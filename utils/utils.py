@@ -110,7 +110,7 @@ def load_official_pretrained_model(model, pretrained_model_path):
 def save_checkpoint(state, epoch, folder, filename='min_loss_checkpoint.pth.tar'):
     if not os.path.exists(folder):
         os.makedirs(folder)
-    
+
     filename = os.path.join(folder, filename)
     torch.save(state, filename)
 
