@@ -98,6 +98,8 @@ def run_inference(
     if torch.cuda.is_available():
         model = model.cuda()
     utils.load_pretrained_model(model, model_path)
+    print('Using device: {}'.format(
+        torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'cpu'))
 
     os.makedirs(output_dir, exist_ok=True)
     for cls_idx in range(NUM_CLS):
