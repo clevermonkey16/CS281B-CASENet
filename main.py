@@ -41,7 +41,7 @@ def main():
     min_val_loss = 999999999
 
     title = 'train|val loss '
-    init = np.NaN
+    init = np.nan
     win_feats5 = viz.line(
         X=np.column_stack((np.array([init]), np.array([init]))),
         Y=np.column_stack((np.array([init]), np.array([init]))),
