@@ -11,7 +11,11 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 
 import sys
-sys.path.append("../")
+import os
+# Add project root to path so dataloader can be found when run from any cwd
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+_project_root = os.path.dirname(_script_dir)
+sys.path.insert(0, _project_root)
 
 from dataloader.cityscapes_data import CityscapesData
 
@@ -20,12 +24,12 @@ import config
 
 def get_dataloader(args):
     # Define data files path.
-    root_img_folder = "/ais/gobi4/fashion/edge_detection/data_aug"
-    root_label_folder = "/ais/gobi4/fashion/edge_detection/data_aug"
-    train_anno_txt = "/ais/gobi4/fashion/edge_detection/data_aug/list_train_aug.txt"
-    val_anno_txt = "/ais/gobi4/fashion/edge_detection/data_aug/list_test.txt"
-    train_hdf5_file = "/ais/gobi6/jiaman/github/CASENet/utils/train_aug_label_binary_np.h5"
-    val_hdf5_file = "/ais/gobi6/jiaman/github/CASENet/utils/test_label_binary_np.h5"
+    root_img_folder = "/workspace/CS281B-CASENet/cityscapes-preprocess/data_proc"
+    root_label_folder = "/workspace/CS281B-CASENet/cityscapes-preprocess/data_proc"
+    train_anno_txt = "/workspace/CS281B-CASENet/cityscapes-preprocess/data_proc/train.txt"
+    val_anno_txt = "/workspace/CS281B-CASENet/cityscapes-preprocess/data_proc/val.txt"
+    train_label_npy_dir = "/workspace/CS281B-CASENet/train_label_npy"
+    val_label_npy_dir = "/workspace/CS281B-CASENet/val_label_npy"
 
     input_size = 472
 
@@ -40,7 +44,7 @@ def get_dataloader(args):
         root_img_folder,
         root_label_folder,
         train_anno_txt,
-        train_hdf5_file,
+        train_label_npy_dir,
         input_size,
         cls_num=args.cls_num,
         img_transform = transforms.Compose([
@@ -55,13 +59,13 @@ def get_dataloader(args):
                         ]))
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=True,
-        num_workers=args.workers, pin_memory=True)
+        num_workers=args.workers, pin_memory=True, persistent_workers=args.workers > 0)
 
     val_dataset = CityscapesData(
         root_img_folder,
         root_label_folder,
         val_anno_txt,
-        val_hdf5_file,
+        val_label_npy_dir,
         input_size,
         cls_num=args.cls_num,
         img_transform = transforms.Compose([
@@ -75,8 +79,8 @@ def get_dataloader(args):
                         transforms.ToTensor(),
                         ]))
     val_loader = torch.utils.data.DataLoader(
-        val_dataset, batch_size=args.batch_size/2, shuffle=False,
-        num_workers=args.workers, pin_memory=True)
+        val_dataset, batch_size=max(1, args.batch_size//2), shuffle=False,
+        num_workers=args.workers, pin_memory=True, persistent_workers=args.workers > 0)
 
     return train_loader, val_loader
 

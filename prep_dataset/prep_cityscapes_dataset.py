@@ -61,8 +61,8 @@ def get_dataloader(args):
     root_label_folder = "/ais/gobi4/fashion/edge_detection/data_aug"
     train_anno_txt = "/ais/gobi4/fashion/edge_detection/data_aug/list_train_aug.txt"
     val_anno_txt = "/ais/gobi4/fashion/edge_detection/data_aug/list_test.txt"
-    train_hdf5_file = "/ais/gobi6/jiaman/github/CASENet/utils/train_aug_label_binary_np.h5"
-    val_hdf5_file = "/ais/gobi6/jiaman/github/CASENet/utils/test_label_binary_np.h5"
+    train_label_npy_dir = "/ais/gobi6/jiaman/github/CASENet/utils/train_label_npy"
+    val_label_npy_dir = "/ais/gobi6/jiaman/github/CASENet/utils/val_label_npy"
 
     input_size = 472
     normalize = transforms.Normalize(mean=[104.008, 116.669, 122.675], std=[1, 1, 1])
@@ -75,7 +75,7 @@ def get_dataloader(args):
         root_img_folder,
         root_label_folder,
         train_anno_txt,
-        train_hdf5_file,
+        train_label_npy_dir,
         input_size,
         cls_num=args.cls_num,
         img_transform = transforms.Compose([
@@ -91,13 +91,13 @@ def get_dataloader(args):
                         ]))
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=True,
-        num_workers=args.workers, pin_memory=True)
-    
+        num_workers=args.workers, pin_memory=True, persistent_workers=args.workers > 0)
+
     val_dataset = CityscapesData(
         root_img_folder,
         root_label_folder,
         val_anno_txt,
-        val_hdf5_file,
+        val_label_npy_dir,
         input_size,
         cls_num=args.cls_num,
         img_transform = transforms.Compose([
@@ -112,9 +112,9 @@ def get_dataloader(args):
                         transforms.ToTensor(),
                         ]))
     val_loader = torch.utils.data.DataLoader(
-        val_dataset, batch_size=args.batch_size/2, shuffle=False,
-        num_workers=args.workers, pin_memory=True)
-    
+        val_dataset, batch_size=max(1, args.batch_size//2), shuffle=False,
+        num_workers=args.workers, pin_memory=True, persistent_workers=args.workers > 0)
+
     return train_loader, val_loader
 
 if __name__ == "__main__":
