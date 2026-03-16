@@ -181,7 +181,17 @@ def main():
     if imp_args.distillation:
         from modules.CASENet import CASENet_resnet101
         teacher = CASENet_resnet101(pretrained=False, num_classes=args.cls_num)
-        utils.load_official_pretrained_model(teacher, imp_args.teacher_path)
+        # Robust checkpoint loading: handle both raw state dict and save_checkpoint wrapper
+        teacher_ckpt = torch.load(imp_args.teacher_path, weights_only=False)
+        if 'state_dict' in teacher_ckpt:
+            teacher_ckpt = teacher_ckpt['state_dict']
+        # Strip 'module.' prefix from multi-GPU checkpoints
+        sample_key = next(iter(teacher_ckpt))
+        model_keys = set(teacher.state_dict().keys())
+        if sample_key not in model_keys and sample_key.startswith('module.'):
+            teacher_ckpt = {k.replace('module.', ''): v for k, v in teacher_ckpt.items()}
+        teacher.load_state_dict(teacher_ckpt, strict=True)
+        del teacher_ckpt
         teacher = teacher.cuda()
         teacher.eval()
         for p in teacher.parameters():
