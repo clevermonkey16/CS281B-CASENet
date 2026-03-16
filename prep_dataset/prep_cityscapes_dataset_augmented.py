@@ -11,7 +11,6 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 
 import sys
-import os
 # Add project root to path so dataloader can be found when run from any cwd
 _script_dir = os.path.dirname(os.path.abspath(__file__))
 _project_root = os.path.dirname(_script_dir)

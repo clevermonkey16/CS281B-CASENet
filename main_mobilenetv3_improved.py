@@ -9,42 +9,31 @@ import torch.nn.parallel
 import torch.backends.cudnn as cudnn
 import torch.optim
 import torch.utils.data
-import torchvision.models as models
-import torch.nn.functional as F
-from torch.autograd import Variable
 
-# Local imports
 import utils.utils as utils
-
-# For model
 from modules.CASENet import CASENet_mobilenetv3
-
-# For training and validation
 import train_val.model_play_improved as model_play
-
-# For settings
 import config
 
 args = config.get_args()
 
-# Additional args for improvements (parsed separately to avoid modifying shared config.py)
 improvement_parser = argparse.ArgumentParser(parents=[], add_help=False)
-improvement_parser.add_argument('--focal-loss', action='store_true', help='Use focal loss instead of weighted BCE')
-improvement_parser.add_argument('--gamma', default=2.0, type=float, help='Focal loss gamma (default: 2.0)')
-improvement_parser.add_argument('--augmentation', action='store_true', help='Use enhanced data augmentation (ColorJitter, GaussianBlur, GaussianNoise, RandomRotation)')
-improvement_parser.add_argument('--random-erasing', action='store_true', help='Use RandomErasing augmentation (can combine with --augmentation)')
-improvement_parser.add_argument('--fp16', action='store_true', help='Use FP16 mixed precision training')
-improvement_parser.add_argument('--visdom', action='store_true', help='Enable Visdom visualization')
+improvement_parser.add_argument('--focal-loss', action='store_true', help='use focal loss')
+improvement_parser.add_argument('--gamma', default=2.0, type=float, help='focal loss gamma (default: 2.0)')
+improvement_parser.add_argument('--augmentation', action='store_true', help='enhanced data augmentation')
+improvement_parser.add_argument('--random-erasing', action='store_true', help='RandomErasing augmentation')
+improvement_parser.add_argument('--fp16', action='store_true', help='FP16 mixed precision')
+improvement_parser.add_argument('--visdom', action='store_true', help='enable Visdom')
 improvement_parser.add_argument('--quantize', type=str, default=None, metavar='CHECKPOINT',
-                                help='Post-training quantization: provide path to trained checkpoint. Produces FP32, FP16, and INT8 versions.')
+                                help='post-training quantization from checkpoint')
 improvement_parser.add_argument('--distillation', action='store_true',
-                                help='Enable knowledge distillation from ResNet-101 teacher')
+                                help='knowledge distillation from ResNet-101 teacher')
 improvement_parser.add_argument('--teacher-path', type=str, default='pretrained_models/model_casenet.pth.tar',
-                                help='Path to teacher model checkpoint (raw state dict)')
+                                help='path to teacher checkpoint')
 improvement_parser.add_argument('--alpha', type=float, default=0.7,
-                                help='Hard loss weight (1-alpha for distillation loss, default: 0.7)')
+                                help='hard loss weight (default: 0.7)')
 improvement_parser.add_argument('--temperature', type=float, default=3.0,
-                                help='Distillation temperature (default: 3.0)')
+                                help='distillation temperature (default: 3.0)')
 imp_args, _ = improvement_parser.parse_known_args()
 
 # Build experiment suffix from active flags
@@ -61,7 +50,6 @@ if imp_args.distillation:
     suffix += "_distill"
 
 def quantize_model(checkpoint_path, num_classes):
-    """Post-training quantization: saves FP32, FP16, and INT8 versions of a trained model."""
     import torch.quantization
 
     output_dir = os.path.dirname(checkpoint_path) or '.'
@@ -115,7 +103,6 @@ def main():
     print("improvements: focal_loss={0} gamma={1} augmentation={2} random_erasing={3} fp16={4} visdom={5} distillation={6}".format(
         imp_args.focal_loss, imp_args.gamma, imp_args.augmentation, imp_args.random_erasing, imp_args.fp16, imp_args.visdom, imp_args.distillation))
 
-    # Post-training quantization mode — skip training entirely
     if imp_args.quantize:
         quantize_model(imp_args.quantize, args.cls_num)
         return
@@ -129,7 +116,6 @@ def main():
     checkpoint_dir = args.checkpoint_folder + suffix if suffix else args.checkpoint_folder + "_improved"
     os.makedirs(checkpoint_dir, exist_ok=True)
 
-    # Select loss function
     if imp_args.focal_loss:
         loss_fn = partial(model_play.WeightedMultiLabelFocalLoss, gamma=imp_args.gamma)
         print("Using Focal Loss (gamma={0}, per-sample adaptive weights)".format(imp_args.gamma))

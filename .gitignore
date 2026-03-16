@@ -6,4 +6,11 @@
 output/
 images/
 
-utils/*.h5val_label_binary_np.h5
+# data files
+*.h5
+*_label_npy/
+
+# training artifacts
+checkpoint*/
+*.log
+nohup.out

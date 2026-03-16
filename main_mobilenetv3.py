@@ -2,28 +2,15 @@ import os
 import numpy as np
 
 import torch
-import torch.nn as nn
 import torch.nn.parallel
 import torch.backends.cudnn as cudnn
 import torch.optim
 import torch.utils.data
-import torchvision.models as models
-import torch.nn.functional as F
-from torch.autograd import Variable
 
-# Local imports
 import utils.utils as utils
-
-# For data loader (MobileNetV3 ImageNet-standard preprocessing)
 import prep_dataset.prep_cityscapes_dataset_mobilenetv3 as prep_cityscapes_dataset
-
-# For model
 from modules.CASENet import CASENet_mobilenetv3
-
-# For training and validation
 import train_val.model_play as model_play
-
-# For visualization
 import visdom
 viz = visdom.Visdom(env='CASENet-MobileNetV3')
 

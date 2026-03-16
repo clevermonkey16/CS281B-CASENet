@@ -26,7 +26,7 @@ def _output_dir_from_model(project_root, model_path):
 
     # collect tag parts from parent dir and filename
     tags = []
-    for keyword in ("focal", "improved", "augment", "deep", "large"):
+    for keyword in ("focal", "improved", "augment", "deep", "large", "distill", "aug"):
         if keyword in parent_dir.lower() or keyword in stem.lower():
             tags.append(keyword)
 

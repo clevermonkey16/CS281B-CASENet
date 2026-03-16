@@ -27,7 +27,7 @@ def convert_num_to_bitfield(label_data, h, w, root_folder, label_png_name, cls_n
 if __name__ == "__main__":
     f = open("test.txt", 'r')
     lines = f.readlines()
-    root_folder = "/Users/anirudhchakravarthy/Documents/CodeArchive/Asian-Paints/CASENet-torch-cityscapes/cityscapes-preprocess/data_proc"
+    root_folder = "cityscapes-preprocess/data_proc"
     cnt = 0
 
     for ori_line in lines:

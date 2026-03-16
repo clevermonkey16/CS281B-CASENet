@@ -4,17 +4,11 @@ import numpy as np
 
 import torch
 from torch import sigmoid
-import torch.nn as nn
-import torch.nn.parallel
-import torch.backends.cudnn as cudnn
-import torch.optim
 import torch.nn.functional as F
-from torch.autograd import Variable
 
 import sys
 sys.path.append("../")
 
-# Local imports
 import utils.utils as utils
 from utils.utils import AverageMeter
 

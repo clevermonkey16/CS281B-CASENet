@@ -4,17 +4,10 @@ import numpy as np
 
 import torch
 from torch import sigmoid
-import torch.nn as nn
-import torch.nn.parallel
-import torch.backends.cudnn as cudnn
-import torch.optim
-import torch.nn.functional as F
-from torch.autograd import Variable
 
 import sys
 sys.path.append("../")
 
-# Local imports
 import utils.utils as utils
 from utils.utils import AverageMeter
 
@@ -58,11 +51,11 @@ def train(args, train_loader, model, optimizer, epoch, curr_lr, win_feats5, win_
             fusion_losses.update(fused_feats_loss.data, bs)
             total_losses.update(loss.data, bs)
 
-            # Only plot the fused feats loss.
-            # trn_feats5_loss = feats5_loss.clone().cpu().data.numpy()
-            # trn_fusion_loss = fused_feats_loss.clone().cpu().data.numpy()
-            # viz.line(win=win_feats5, name='train_feats5', update='append', X=np.array([global_step]), Y=np.array([trn_feats5_loss]))
-            # viz.line(win=win_fusion, name='train_fusion', update='append', X=np.array([global_step]), Y=np.array([trn_fusion_loss]))
+            if viz is not None:
+                trn_feats5_loss = feats5_loss.clone().cpu().data.numpy()
+                trn_fusion_loss = fused_feats_loss.clone().cpu().data.numpy()
+                viz.line(win=win_feats5, name='train_feats5', update='append', X=np.array([global_step]), Y=np.array([trn_feats5_loss]))
+                viz.line(win=win_fusion, name='train_fusion', update='append', X=np.array([global_step]), Y=np.array([trn_fusion_loss]))
 
             optimizer.step()
             optimizer.zero_grad()
@@ -142,8 +135,9 @@ def validate(args, val_loader, model, epoch, win_feats5, win_fusion, viz, global
                       .format(epoch, i, len(val_loader), batch_time=batch_time,
                        data_time=data_time, total_loss=total_losses))
 
-    # viz.line(win=win_feats5, name='val_feats5', update='append', X=np.array([global_step]), Y=np.array([feats5_losses.avg.cpu()]))
-    # viz.line(win=win_fusion, name='val_fusion', update='append', X=np.array([global_step]), Y=np.array([fusion_losses.avg.cpu()]))
+    if viz is not None:
+        viz.line(win=win_feats5, name='val_feats5', update='append', X=np.array([global_step]), Y=np.array([feats5_losses.avg.cpu()]))
+        viz.line(win=win_fusion, name='val_fusion', update='append', X=np.array([global_step]), Y=np.array([fusion_losses.avg.cpu()]))
 
     return fusion_losses.avg
 

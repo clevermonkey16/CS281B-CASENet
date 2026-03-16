@@ -1,6 +1,5 @@
 import torch.nn as nn
 import torch
-from torch.autograd import Variable
 import math
 import torchvision.models as models
 import sys
@@ -507,16 +506,11 @@ def CASENet_resnet101(pretrained=False, num_classes=19):
 if __name__ == "__main__":
     model = CASENet_resnet101(pretrained=False, num_classes=19) # 19 classes for Cityscapes
 
-    npy_folder = "/Users/anirudhchakravarthy/Documents/CodeArchive/Asian-Paints/CASENet-torch-cityscapes/pretrained_models/"
-    loaded_model_path = "/Users/anirudhchakravarthy/Documents/CodeArchive/Asian-Paints/CASENet-torch-cityscapes/pretrained_models/model_casenet.pth.tar"
+    npy_folder = "pretrained_models/"
+    loaded_model_path = "pretrained_models/model_casenet.pth.tar"
     layer_to_name_dict = gen_mapping_layer_name(model)
     load_npy_to_layer(model, layer_to_name_dict, npy_folder, loaded_model_path)
-    
-    # npy_folder = "/Users/anirudhchakravarthy/Documents/CodeArchive/Asian-Paints/CASENet-torch/init_models/"
-    # # loaded_model_path = "/Users/anirudhchakravarthy/Documents/CodeArchive/Asian-Paints/CASENet-torch/init_models/casenet_inst_init.pth.tar"
-    # layer_to_name_dict = gen_mapping_layer_name(model)
-    # load_npy_to_layer(model, layer_to_name_dict, npy_folder, loaded_model_path)
-    
+
     input_data = torch.rand(2, 3, 472, 472)
     input_var = Variable(input_data)
     output1, output2  = model(input_var) 
