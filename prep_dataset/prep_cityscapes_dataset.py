@@ -57,12 +57,12 @@ class ToTorchFormatTensor(object):
 
 def get_dataloader(args):
     # Define data files path.
-    root_img_folder = "/ais/gobi4/fashion/edge_detection/data_aug" 
-    root_label_folder = "/ais/gobi4/fashion/edge_detection/data_aug"
-    train_anno_txt = "/ais/gobi4/fashion/edge_detection/data_aug/list_train_aug.txt"
-    val_anno_txt = "/ais/gobi4/fashion/edge_detection/data_aug/list_test.txt"
-    train_label_npy_dir = "/ais/gobi6/jiaman/github/CASENet/utils/train_label_npy"
-    val_label_npy_dir = "/ais/gobi6/jiaman/github/CASENet/utils/val_label_npy"
+    root_img_folder = "/workspace/CS281B-CASENet/cityscapes-preprocess/data_proc"
+    root_label_folder = "/workspace/CS281B-CASENet/cityscapes-preprocess/data_proc"
+    train_anno_txt = "/workspace/CS281B-CASENet/cityscapes-preprocess/data_proc/train.txt"
+    val_anno_txt = "/workspace/CS281B-CASENet/cityscapes-preprocess/data_proc/val.txt"
+    train_label_npy_dir = "/workspace/CS281B-CASENet/train_label_npy"
+    val_label_npy_dir = "/workspace/CS281B-CASENet/val_label_npy"
 
     input_size = 472
     normalize = transforms.Normalize(mean=[104.008, 116.669, 122.675], std=[1, 1, 1])
